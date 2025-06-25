@@ -48,7 +48,7 @@ android.ndk = 23b
 android.sdk = 24
 
 # (str) The Android API level to use
-android.api = 27
+android.api = 30
 
 # (str) The Android build tools version to use
 android.build_tools = 30.0.3
