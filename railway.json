@@ -1,0 +1,11 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "cd controller/redlogger_controller && python src/main.py",
+    "healthcheckPath": "/api/devices",
+    "healthcheckTimeout": 300
+  }
+}
+

