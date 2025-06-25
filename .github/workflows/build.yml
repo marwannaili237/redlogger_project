@@ -1,3 +1,6 @@
+     exit 1
+        fi
+
 name: Build Android APK
 
 on:
@@ -20,7 +23,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: '3.10'
 
     - name: Set up Java
       uses: actions/setup-java@v3
@@ -54,6 +57,10 @@ jobs:
       working-directory: redlogger_client
       run: |
         buildozer android debug
+
+    - name: List APK files
+      run: ls -la bin/
+      working-directory: redlogger_client
 
     - name: Upload APK artifact
       uses: actions/upload-artifact@v3
@@ -161,4 +168,4 @@ jobs:
           echo "❌ buildozer.spec not found"
           exit 1
         fi
-
+        
