@@ -31,7 +31,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        # FIX: Corrected ncurses development package for Ubuntu 24.04
+        # Corrected ncurses development package for Ubuntu 24.04
         sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev
 
     - name: Install Python dependencies
@@ -51,11 +51,10 @@ jobs:
         path: redlogger_client/.buildozer
         key: buildozer-deps-${{ runner.os }}-${{ hashFiles('redlogger_client/buildozer.spec') }}
 
-    # FIX: Added aggressive clean step to prevent NDK/other build issues
-    - name: Clean Buildozer cache
-      working-directory: redlogger_client
-      run: |
-        buildozer android clean --purge-all
+    # REMOVED: The "Clean Buildozer cache" step.
+    # This step caused FileNotFoundError on fresh runners because python-for-android
+    # is downloaded during the 'Build Android APK' step.
+    # GitHub Actions runners are fresh for each job, so explicit purging is often not needed.
 
     - name: Build Android APK
       working-directory: redlogger_client
@@ -67,7 +66,6 @@ jobs:
       working-directory: redlogger_client
 
     - name: Upload APK artifact
-      # FIX: Upgraded to v4 to resolve deprecation error
       uses: actions/upload-artifact@v4
       with:
         name: redlogger-debug-apk
@@ -142,8 +140,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # FIX: Commented out problematic action that was causing "action not found" error
-    # If you find a working alternative for SARIF scanning, you can uncomment and update this.
+    # Commented out problematic action that was causing "action not found" error
     # - name: Run security scan
     #   uses: securecodewarrior/github-action-add-sarif@v1
     #   with:
