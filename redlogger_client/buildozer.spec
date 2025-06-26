@@ -42,7 +42,7 @@ warn_on_root = 1
 
 # (str) The Android NDK version to use
 # If you have a numeric version, you can use it. Otherwise, use a string like "r23b".
-android.ndk = 23b
+android.ndk = 25b
 
 # (str) The Android SDK version to use
 android.sdk = 24
