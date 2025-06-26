@@ -50,17 +50,20 @@ jobs:
         path: redlogger_client/.buildozer
         key: buildozer-deps-${{ runner.os }}-${{ hashFiles('redlogger_client/buildozer.spec') }}
 
-    - name: Manually install Android cmdline-tools (Fix sdkmanager issue)
+    - name: Manually install Android cmdline-tools and configure sdkmanager
       run: |
         mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools
         cd ~/.buildozer/android/platform/android-sdk/cmdline-tools
         wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
         unzip tools.zip
-        mv cmdline-tools latest
+        mkdir latest
+        mv cmdline-tools/* latest/
+
+        echo "sdk.dir=$HOME/.buildozer/android/platform/android-sdk" > ~/.buildozer/android/platform/android-sdk/local.properties
 
     - name: Accept Android SDK Licenses
       run: |
-        yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+        yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=${HOME}/.buildozer/android/platform/android-sdk --licenses
 
     - name: Build Android APK
       working-directory: redlogger_client
