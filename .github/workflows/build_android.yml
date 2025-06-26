@@ -31,8 +31,8 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        # FIX: Replaced libncurses5-dev and libtinfo5 with libncursesw6-dev for Ubuntu 24.04 compatibility
-        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncursesw6-dev cmake libffi-dev libssl-dev
+        # FIX: Corrected ncurses development package for Ubuntu 24.04
+        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev
 
     - name: Install Python dependencies
       run: |
