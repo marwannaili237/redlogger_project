@@ -7,37 +7,38 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual triggering from GitHub UI
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # Uses a fresh Ubuntu virtual machine for each run
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v4 # Clones your repository
 
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'
+        python-version: '3.10' # Installs Python 3.10
 
     - name: Set up Java
       uses: actions/setup-java@v3
       with:
         distribution: 'temurin'
-        java-version: '17'
+        java-version: '17' # Installs Java 17 (required for Android SDK)
 
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev # Installs common build tools
 
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install buildozer cython
+        pip install buildozer cython # Installs Buildozer and Cython
 
+    # Caching steps (optional but recommended for faster subsequent builds)
     - name: Cache Buildozer global directory
       uses: actions/cache@v3
       with:
@@ -50,23 +51,32 @@ jobs:
         path: redlogger_client/.buildozer
         key: buildozer-deps-${{ runner.os }}-${{ hashFiles('redlogger_client/buildozer.spec') }}
 
+    # --- IMPORTANT ADDITION: Clean Buildozer Cache ---
+    - name: Clean Buildozer cache
+      working-directory: redlogger_client
+      run: |
+        buildozer android clean --purge-all # Cleans all build artifacts and downloaded tools
+      # This step ensures a completely fresh build environment,
+      # which is crucial for resolving issues like NDK mismatches or corrupted downloads.
+
     - name: Build Android APK
       working-directory: redlogger_client
       run: |
-        buildozer android debug
+        buildozer android debug # Runs the Buildozer command to create the APK
 
     - name: List APK files
-      run: ls -la bin/
+      run: ls -la bin/ # Lists files in the 'bin' directory to confirm APK creation
       working-directory: redlogger_client
 
     - name: Upload APK artifact
       uses: actions/upload-artifact@v3
       with:
-        name: redlogger-debug-apk
-        path: redlogger_client/bin/*.apk
+        name: redlogger-debug-apk # Name of the artifact
+        path: redlogger_client/bin/*.apk # Path to the generated APK
+      # This makes the APK downloadable from the GitHub Actions run summary
 
     - name: Create Release (on tag)
-      if: startsWith(github.ref, 'refs/tags/')
+      if: startsWith(github.ref, 'refs/tags/') # Only runs if a Git tag is pushed
       uses: softprops/action-gh-release@v1
       with:
         files: redlogger_client/bin/*.apk
@@ -100,9 +110,9 @@ jobs:
         draft: false
         prerelease: false
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Required for creating GitHub Releases
 
-  test-controller:
+  test-controller: # Separate job for testing the controller
     runs-on: ubuntu-latest
 
     steps:
@@ -127,7 +137,7 @@ jobs:
         timeout 10s python src/main.py || true
         echo "Controller startup test completed"
 
-  security-scan:
+  security-scan: # Separate job for security checks
     runs-on: ubuntu-latest
     
     steps:
