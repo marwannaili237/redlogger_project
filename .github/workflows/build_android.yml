@@ -51,10 +51,14 @@ jobs:
         path: redlogger_client/.buildozer
         key: buildozer-deps-${{ runner.os }}-${{ hashFiles('redlogger_client/buildozer.spec') }}
 
-    # REMOVED: The "Clean Buildozer cache" step.
-    # This step caused FileNotFoundError on fresh runners because python-for-android
-    # is downloaded during the 'Build Android APK' step.
-    # GitHub Actions runners are fresh for each job, so explicit purging is often not needed.
+    # REMOVED: The "Clean Buildozer cache" step (caused FileNotFoundError on fresh runners)
+
+    # FIX: Accept Android SDK licenses to prevent hanging during build
+    - name: Accept Android SDK licenses
+      run: |
+        # Buildozer downloads SDK tools to this path.
+        # We need to accept licenses for them before Buildozer tries to use them interactively.
+        yes | /home/runner/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager --licenses
 
     - name: Build Android APK
       working-directory: redlogger_client
