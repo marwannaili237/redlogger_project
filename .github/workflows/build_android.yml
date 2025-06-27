@@ -2,9 +2,11 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -50,22 +52,61 @@ jobs:
 
     - name: Manually install Android SDK cmdline-tools
       run: |
-        mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools
-        cd ~/.buildozer/android/platform/android-sdk/cmdline-tools
-        curl -o sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-        unzip sdk.zip
-        rm sdk.zip
-        mv cmdline-tools latest
+        set -x # Enable shell debugging
+        SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
+        CMDLINE_TOOLS_DIR="$SDK_DIR/cmdline-tools"
+        LATEST_TOOLS_DIR="$CMDLINE_TOOLS_DIR/latest"
+
+        echo "Creating SDK directories..."
+        mkdir -p "$LATEST_TOOLS_DIR"
+        ls -l "$SDK_DIR"
+        ls -l "$CMDLINE_TOOLS_DIR"
+        ls -l "$LATEST_TOOLS_DIR"
+
+        echo "Downloading command-line tools..."
+        curl -L -o "$CMDLINE_TOOLS_DIR/tools.zip" https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+        ls -l "$CMDLINE_TOOLS_DIR"
+
+        echo "Unzipping tools..."
+        unzip "$CMDLINE_TOOLS_DIR/tools.zip" -d "$CMDLINE_TOOLS_DIR"
+        ls -l "$CMDLINE_TOOLS_DIR"
+
+        echo "Moving extracted tools to 'latest' directory..."
+        # The unzip command extracts to a 'cmdline-tools' folder inside CMDLINE_TOOLS_DIR
+        # So we need to move contents from CMDLINE_TOOLS_DIR/cmdline-tools/* to LATEST_TOOLS_DIR
+        mv "$CMDLINE_TOOLS_DIR/cmdline-tools/"* "$LATEST_TOOLS_DIR/"
+        ls -l "$LATEST_TOOLS_DIR"
+        
+        echo "Cleaning up zip file and empty directory..."
+        rm "$CMDLINE_TOOLS_DIR/tools.zip"
+        rmdir "$CMDLINE_TOOLS_DIR/cmdline-tools" # Remove the now empty extracted folder
+        ls -l "$CMDLINE_TOOLS_DIR"
+
+        echo "Creating local.properties file..."
+        echo "sdk.dir=$SDK_DIR" > "$SDK_DIR/local.properties"
+        cat "$SDK_DIR/local.properties"
 
     - name: Accept Android SDK licenses
       run: |
-        yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/cmdline-tools/bin/sdkmanager --licenses
+        # Use HOME variable for robustness
+        SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+        SDKMANAGER_PATH="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+        
+        echo "Attempting to accept licenses using: $SDKMANAGER_PATH"
+        # Check if sdkmanager exists before running
+        if [ -f "$SDKMANAGER_PATH" ]; then
+          yes | "$SDKMANAGER_PATH" --sdk_root="$SDK_ROOT" --licenses
+        else
+          echo "ERROR: sdkmanager not found at $SDKMANAGER_PATH. Manual installation step likely failed."
+          exit 1 # Fail the step explicitly if sdkmanager is not found
+        fi
 
     - name: Build Android APK
       working-directory: redlogger_client
       env:
         ANDROID_HOME: /home/runner/.buildozer/android/platform/android-sdk
-        PATH: /home/runner/.buildozer/android/platform/android-sdk/cmdline-tools/latest/cmdline-tools/bin:$PATH
+        # Ensure sdkmanager is in PATH for buildozer
+        PATH: /home/runner/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:$PATH
       run: |
         buildozer android debug
 
