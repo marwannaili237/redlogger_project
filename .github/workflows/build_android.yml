@@ -12,20 +12,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # --- BEST APPROACH: Use a pre-built Docker image for Buildozer ---
-    container: kivy/buildozer:latest # This image contains Python, Java, Android SDK/NDK, and Buildozer pre-configured
+    # --- FIX: Use a more stable Docker image tag ---
+    container: kivy/buildozer:stable # Changed from 'latest' to 'stable'
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
-    # All these steps are now handled by the 'container' image:
-    # - name: Set up Python
-    # - name: Set up Java
-    # - name: Install system dependencies
-    # - name: Install Python dependencies
-    # - name: Manually install Android SDK cmdline-tools
-    # - name: Accept Android SDK Licenses
 
     - name: Cache Buildozer global directory
       uses: actions/cache@v3
@@ -41,10 +33,7 @@ jobs:
 
     - name: Build Android APK
       working-directory: redlogger_client
-      # No need to set ANDROID_HOME or PATH explicitly, the container handles it
       run: |
-        # The 'WARNING: Config token app android.sdk is deprecated and ignored, but you set value 24'
-        # is harmless and can be ignored. It's related to an old Buildozer config option.
         buildozer android debug
 
     - name: List generated APKs
@@ -52,7 +41,7 @@ jobs:
       run: ls -la bin/
 
     - name: Upload APK artifact
-      uses: actions/upload-artifact@v4 # Updated to v4
+      uses: actions/upload-artifact@v4
       with:
         name: redlogger-debug-apk
         path: redlogger_client/bin/*.apk
@@ -85,7 +74,6 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Keep other jobs as they are, they don't need the Buildozer environment
   test-controller:
     runs-on: ubuntu-latest
 
@@ -116,13 +104,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
-    # Commented out problematic action that was causing "action not found" error
-    # - name: Run security scan
-    #   uses: securecodewarrior/github-action-add-sarif@v1
-    #   with:
-    #     sarif-file: 'security-scan-results.sarif'
-    #   continue-on-error: true
 
     - name: Check for hardcoded secrets
       run: |
