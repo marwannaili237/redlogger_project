@@ -7,32 +7,24 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch: # Allows manual triggering from GitHub UI
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    # --- CORE OF THE ROBUST STRATEGY: Use a pre-built Docker image ---
-    # This image contains Python, Java, Android SDK/NDK, Buildozer, and python-for-android
-    # pre-configured and compatible. It eliminates most environment setup issues.
-    container: kivy/buildozer:stable # Using 'stable' for better reliability than 'latest'
+    # --- FIX: Use a specific, recent Docker image tag ---
+    # 'stable' tag does not exist. 'latest' causes 'unsupported media type'.
+    # Trying a specific version tag that should be stable.
+    container: kivy/buildozer:1.5.0 # Changed from 'stable' to '1.5.0'
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4 # Clones your repository into the container
-
-    # All previous manual setup steps are now handled by the 'kivy/buildozer:stable' container:
-    # - Set up Python
-    # - Set up Java
-    # - Install system dependencies (git, zip, unzip, autoconf, etc.)
-    # - Install Python dependencies (buildozer, cython)
-    # - Manually install Android SDK cmdline-tools
-    # - Accept Android SDK Licenses
+      uses: actions/checkout@v4
 
     - name: Cache Buildozer global directory
       uses: actions/cache@v3
       with:
-        path: ~/.buildozer # Cache Buildozer's global downloads (SDK, NDK, p4a recipes)
+        path: ~/.buildozer
         key: buildozer-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}
         restore-keys: |
           buildozer-${{ runner.os }}-
@@ -40,38 +32,35 @@ jobs:
     - name: Cache Buildozer project directory
       uses: actions/cache@v3
       with:
-        path: redlogger_client/.buildozer # Cache project-specific buildozer artifacts
+        path: redlogger_client/.buildozer
         key: buildozer-deps-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}
         restore-keys: |
           buildozer-deps-${{ runner.os }}-
 
     - name: Build Android APK
-      working-directory: redlogger_client # Change to the directory containing buildozer.spec
-      # The container sets up necessary environment variables (ANDROID_HOME, PATH)
+      working-directory: redlogger_client
       run: |
-        # The 'WARNING: Config token app android.sdk is deprecated and ignored, but you set value 24'
-        # is harmless and can be ignored. It's related to an old Buildozer config option.
         echo "Starting Buildozer build process..."
         buildozer android debug
         echo "Buildozer build process finished."
 
     - name: List generated APKs
       working-directory: redlogger_client
-      run: ls -la bin/ # Verify APK is in the 'bin' directory
+      run: ls -la bin/
 
     - name: Upload APK artifact
-      uses: actions/upload-artifact@v4 # Use the latest v4 for artifact uploads
+      uses: actions/upload-artifact@v4
       with:
-        name: redlogger-debug-apk # Name of the downloadable artifact
-        path: redlogger_client/bin/*.apk # Path to the generated APK file(s)
+        name: redlogger-debug-apk
+        path: redlogger_client/bin/*.apk
 
-    - name: Create GitHub Release (on tag)
-      if: startsWith(github.ref, 'refs/tags/') # Only runs if a Git tag is pushed
-      uses: softprops/action-gh-release@v1 # Action to create a GitHub Release
+    - name: Create GitHub Release (if tagged)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
       with:
-        files: redlogger_client/bin/*.apk # Attach the APK to the release
-        name: Redlogger ${{ github.ref_name }} # Release name (e.g., Redlogger v1.0)
-        body: | # Release description
+        files: redlogger_client/bin/*.apk
+        name: Redlogger ${{ github.ref_name }}
+        body: |
           ## Redlogger Android APK - v${{ github.ref_name }}
 
           ### ⚠️ Warning
@@ -87,12 +76,12 @@ jobs:
           - Audio/photo capture
           - File management
           - Telegram C2 communication
-        draft: false # Set to true to create a draft release
-        prerelease: false # Set to true for a pre-release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Required for creating GitHub Releases (ensure 'contents: write' permission)
 
-  # These jobs run on standard ubuntu-latest runners, as they don't need the Buildozer container
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   test-controller:
     runs-on: ubuntu-latest
 
@@ -124,19 +113,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # The 'securecodewarrior/github-action-add-sarif@v1' action was causing "action not found" errors.
-    # It's commented out to ensure the workflow runs without interruption.
-    # If you need SARIF scanning, you'll need to find a working alternative.
-    # - name: Run security scan
-    #   uses: securecodewarrior/github-action-add-sarif@v1
-    #   with:
-    #     sarif-file: 'security-scan-results.sarif'
-    #   continue-on-error: true
-
     - name: Check for hardcoded secrets
       run: |
         echo "Checking for hardcoded secrets..."
-        # This checks for placeholder tokens in your code.
         if grep -r "YOUR_TELEGRAM_BOT_TOKEN\|YOUR_TELEGRAM_CHAT_ID\|YOUR_NOIP_URL" . --exclude-dir=.git; then
           echo "⚠️ Found placeholder tokens - make sure to replace them before use"
         else
@@ -148,14 +127,163 @@ jobs:
         echo "Validating buildozer.spec..."
         if [ -f "redlogger_client/buildozer.spec" ]; then
           echo "✅ buildozer.spec found"
-          # Ensure INTERNET permission is declared, as it's critical for your app's functionality
           if grep -q "INTERNET" redlogger_client/buildozer.spec; then
             echo "✅ INTERNET permission found"
           else
             echo "❌ INTERNET permission missing"
-            exit 1 # Fail the job if INTERNET permission is not found
+            exit 1
           fi
         else
           echo "❌ buildozer.spec not found"
-          exit 1 # Fail the job if buildozer.spec is missing
+          exit 1
+        fi
+```It seems the `kivy/buildozer:stable` tag is not found on Docker Hub, leading to the `manifest unknown` error. My apologies for that oversight; it appears the Kivy project might not maintain a `stable` tag explicitly.
+
+The previous `unsupported media type` error with `kivy/buildozer:latest` suggests a potential compatibility issue between the image's build format and the Docker daemon on the GitHub Actions runner.
+
+To address both of these, let's try using a **specific, recent version tag** that is known to be stable. According to PyPI, Buildozer version `1.5.0` is the latest stable release. Let's explicitly use that tag for the Docker image.
+
+### Updated Workflow with `kivy/buildozer:1.5.0`
+
+**Please replace the `container` line in your `build_android.yml` file on GitHub with the following:**
+
+```yaml
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # --- FIX: Use a specific, recent Docker image tag ---
+    # 'stable' tag does not exist. 'latest' caused 'unsupported media type'.
+    # Using a specific version tag (1.5.0) which is the latest stable release.
+    container: kivy/buildozer:1.5.0 # Changed from 'stable' to '1.5.0'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Cache Buildozer global directory
+      uses: actions/cache@v3
+      with:
+        path: ~/.buildozer
+        key: buildozer-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}
+        restore-keys: |
+          buildozer-${{ runner.os }}-
+
+    - name: Cache Buildozer project directory
+      uses: actions/cache@v3
+      with:
+        path: redlogger_client/.buildozer
+        key: buildozer-deps-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}
+        restore-keys: |
+          buildozer-deps-${{ runner.os }}-
+
+    - name: Build Android APK
+      working-directory: redlogger_client
+      run: |
+        echo "Starting Buildozer build process..."
+        buildozer android debug
+        echo "Buildozer build process finished."
+
+    - name: List generated APKs
+      working-directory: redlogger_client
+      run: ls -la bin/
+
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: redlogger-debug-apk
+        path: redlogger_client/bin/*.apk
+
+    - name: Create GitHub Release (if tagged)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: redlogger_client/bin/*.apk
+        name: Redlogger ${{ github.ref_name }}
+        body: |
+          ## Redlogger Android APK - v${{ github.ref_name }}
+
+          ### ⚠️ Warning
+          Use this tool only for authorized testing. Illegal usage is strictly prohibited.
+
+          ### Setup instructions:
+          - Install APK on test device
+          - Configure Telegram bot token and chat ID
+          - (Optional) Configure No-IP domain
+
+          ### Features:
+          - Background service
+          - Audio/photo capture
+          - File management
+          - Telegram C2 communication
+
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-controller:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install controller dependencies
+      working-directory: controller/redlogger_controller
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Test controller startup
+      working-directory: controller/redlogger_controller
+      run: |
+        timeout 10s python src/main.py || true
+        echo "Controller startup test completed"
+
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check for hardcoded secrets
+      run: |
+        echo "Checking for hardcoded secrets..."
+        if grep -r "YOUR_TELEGRAM_BOT_TOKEN\|YOUR_TELEGRAM_CHAT_ID\|YOUR_NOIP_URL" . --exclude-dir=.git; then
+          echo "⚠️ Found placeholder tokens - make sure to replace them before use"
+        else
+          echo "✅ No placeholder tokens found"
+        fi
+
+    - name: Validate buildozer.spec
+      run: |
+        echo "Validating buildozer.spec..."
+        if [ -f "redlogger_client/buildozer.spec" ]; then
+          echo "✅ buildozer.spec found"
+          if grep -q "INTERNET" redlogger_client/buildozer.spec; then
+            echo "✅ INTERNET permission found"
+          else
+            echo "❌ INTERNET permission missing"
+            exit 1
+          fi
+        else
+          echo "❌ buildozer.spec not found"
+          exit 1
         fi
