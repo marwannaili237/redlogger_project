@@ -31,7 +31,16 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev openjdk-17-jdk curl
+        # Removed redundant openjdk-17-jdk and curl as they are handled elsewhere or not strictly needed here.
+        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev
+
+    # FIX: Added step to verify Git installation
+    - name: Verify Git Installation
+      run: |
+        echo "Verifying git installation..."
+        which git
+        git --version
+        echo "Git verification complete."
 
     - name: Install Python dependencies
       run: |
@@ -59,9 +68,9 @@ jobs:
 
         echo "Creating SDK directories..."
         mkdir -p "$LATEST_TOOLS_DIR"
-        ls -l "$SDK_DIR"
-        ls -l "$CMDLINE_TOOLS_DIR"
-        ls -l "$LATEST_TOOLS_DIR"
+        ls -l "$SDK_DIR" || true # Use || true to prevent failure if dir doesn't exist yet
+        ls -l "$CMDLINE_TOOLS_DIR" || true
+        ls -l "$LATEST_TOOLS_DIR" || true
 
         echo "Downloading command-line tools..."
         curl -L -o "$CMDLINE_TOOLS_DIR/tools.zip" https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
@@ -72,8 +81,6 @@ jobs:
         ls -l "$CMDLINE_TOOLS_DIR"
 
         echo "Moving extracted tools to 'latest' directory..."
-        # The unzip command extracts to a 'cmdline-tools' folder inside CMDLINE_TOOLS_DIR
-        # So we need to move contents from CMDLINE_TOOLS_DIR/cmdline-tools/* to LATEST_TOOLS_DIR
         mv "$CMDLINE_TOOLS_DIR/cmdline-tools/"* "$LATEST_TOOLS_DIR/"
         ls -l "$LATEST_TOOLS_DIR"
         
@@ -88,24 +95,21 @@ jobs:
 
     - name: Accept Android SDK licenses
       run: |
-        # Use HOME variable for robustness
         SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
         SDKMANAGER_PATH="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
         
         echo "Attempting to accept licenses using: $SDKMANAGER_PATH"
-        # Check if sdkmanager exists before running
         if [ -f "$SDKMANAGER_PATH" ]; then
           yes | "$SDKMANAGER_PATH" --sdk_root="$SDK_ROOT" --licenses
         else
           echo "ERROR: sdkmanager not found at $SDKMANAGER_PATH. Manual installation step likely failed."
-          exit 1 # Fail the step explicitly if sdkmanager is not found
+          exit 1
         fi
 
     - name: Build Android APK
       working-directory: redlogger_client
       env:
         ANDROID_HOME: /home/runner/.buildozer/android/platform/android-sdk
-        # Ensure sdkmanager is in PATH for buildozer
         PATH: /home/runner/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:$PATH
       run: |
         buildozer android debug
