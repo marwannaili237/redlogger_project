@@ -130,6 +130,8 @@ jobs:
         # Explicitly set ANDROID_HOME and update PATH for Buildozer
         ANDROID_HOME: /home/runner/.buildozer/android/platform/android-sdk
         PATH: /home/runner/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:$PATH
+        # Explicitly tell Python-based tools where to find Git
+        GIT_PYTHON_GIT_EXECUTABLE: /usr/bin/git
         # Buildozer often needs JAVA_HOME as well, though setup-java usually handles it.
         JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }} # Use the path set by setup-java action
       run: |
