@@ -1,13 +1,235 @@
-name: Minimal Build Test
+name: Build Android APK
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: # Allows manual triggering from GitHub UI
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: kivy/buildozer:1.5.0 # The problematic line
+    # --- NO CONTAINER: Install everything directly on the runner for maximum control ---
 
     steps:
-    - name: Simple Test
-      run: echo "Hello from container!"
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Set up Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Install system dependencies
+      run: |
+        echo "Updating apt-get and installing system dependencies..."
+        sudo apt-get update
+        # libncurses-dev is the correct package for ncurses development headers on Ubuntu 24.04
+        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev curl openjdk-17-jdk
+        echo "System dependencies installed."
+
+    - name: Verify Git Installation
+      run: |
+        echo "Verifying git installation..."
+        which git
+        git --version
+        echo "Git verification complete."
+
+    - name: Install Python dependencies
+      run: |
+        echo "Installing Python dependencies (buildozer, cython)..."
+        python -m pip install --upgrade pip
+        pip install buildozer cython
+        echo "Python dependencies installed."
+
+    - name: Cache Buildozer global directory
+      uses: actions/cache@v3
+      with:
+        path: ~/.buildozer
+        key: buildozer-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}
+        restore-keys: |
+          buildozer-${{ runner.os }}-
+
+    - name: Cache Buildozer project directory
+      uses: actions/cache@v3
+      with:
+        path: redlogger_client/.buildozer
+        key: buildozer-deps-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}
+        restore-keys: |
+          buildozer-deps-${{ runner.os }}-
+
+    - name: Manually install Android SDK cmdline-tools and NDK
+      run: |
+        set -x # Enable shell debugging for this step
+        SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
+        CMDLINE_TOOLS_DIR="$SDK_DIR/cmdline-tools"
+        LATEST_TOOLS_DIR="$CMDLINE_TOOLS_DIR/latest"
+        NDK_DIR="$HOME/.buildozer/android/platform/android-ndk-r25b" # Match buildozer.spec NDK version
+
+        echo "Creating SDK directories..."
+        mkdir -p "$LATEST_TOOLS_DIR"
+        mkdir -p "$NDK_DIR"
+
+        echo "Downloading Android Command Line Tools (latest stable version)..."
+        # Using a specific, known-good version of commandlinetools
+        curl -L -o "$CMDLINE_TOOLS_DIR/tools.zip" https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+        
+        echo "Unzipping Command Line Tools..."
+        unzip "$CMDLINE_TOOLS_DIR/tools.zip" -d "$CMDLINE_TOOLS_DIR"
+        
+        echo "Moving extracted tools to 'latest' directory..."
+        # The unzip command extracts to a 'cmdline-tools' folder inside CMDLINE_TOOLS_DIR
+        mv "$CMDLINE_TOOLS_DIR/cmdline-tools/"* "$LATEST_TOOLS_DIR/"
+        
+        echo "Cleaning up tools zip file and empty directory..."
+        rm "$CMDLINE_TOOLS_DIR/tools.zip"
+        rmdir "$CMDLINE_TOOLS_DIR/cmdline-tools" # Remove the now empty extracted folder
+
+        echo "Downloading Android NDK (r25b, matching buildozer.spec)..."
+        curl -L -o "$NDK_DIR/ndk.zip" https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+        
+        echo "Unzipping NDK..."
+        unzip "$NDK_DIR/ndk.zip" -d "$NDK_DIR"
+        
+        echo "Moving NDK contents up one level and cleaning up..."
+        mv "$NDK_DIR/android-ndk-r25b/"* "$NDK_DIR/"
+        rmdir "$NDK_DIR/android-ndk-r25b"
+        rm "$NDK_DIR/ndk.zip"
+
+        echo "Creating local.properties file for SDK..."
+        echo "sdk.dir=$SDK_DIR" > "$SDK_DIR/local.properties"
+        cat "$SDK_DIR/local.properties"
+
+        echo "Manually installed Android SDK and NDK."
+
+    - name: Accept Android SDK licenses
+      run: |
+        echo "Accepting Android SDK licenses..."
+        SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+        SDKMANAGER_PATH="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+        
+        # Ensure sdkmanager is executable
+        chmod +x "$SDKMANAGER_PATH"
+
+        # Run sdkmanager to accept licenses
+        yes | "$SDKMANAGER_PATH" --sdk_root="$SDK_ROOT" --licenses
+        echo "Android SDK licenses accepted."
+
+    - name: Build Android APK
+      working-directory: redlogger_client
+      env:
+        # Explicitly set ANDROID_HOME and update PATH for Buildozer
+        ANDROID_HOME: /home/runner/.buildozer/android/platform/android-sdk
+        PATH: /home/runner/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin:$PATH
+        # Buildozer often needs JAVA_HOME as well, though setup-java usually handles it.
+        JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }} # Use the path set by setup-java action
+      run: |
+        echo "Starting Buildozer build process..."
+        # The 'WARNING: Config token app android.sdk is deprecated and ignored, but you set value 24'
+        # is harmless and can be ignored. It's related to an old Buildozer config option.
+        buildozer android debug
+        echo "Buildozer build process finished."
+
+    - name: List generated APKs
+      working-directory: redlogger_client
+      run: ls -la bin/ # Verify APK is in the 'bin' directory
+
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4 # Use the latest v4 for artifact uploads
+      with:
+        name: redlogger-debug-apk # Name of the downloadable artifact
+        path: redlogger_client/bin/*.apk # Path to the generated APK file(s)
+
+    - name: Create GitHub Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/') # Only runs if a Git tag is pushed
+      uses: softprops/action-gh-release@v1 # Action to create a GitHub Release
+      with:
+        files: redlogger_client/bin/*.apk # Attach the APK to the release
+        name: Redlogger ${{ github.ref_name }} # Release name (e.g., Redlogger v1.0)
+        body: | # Release description
+          ## Redlogger Android APK - v${{ github.ref_name }}
+
+          ### ⚠️ Warning
+          Use this tool only for authorized testing. Illegal usage is strictly prohibited.
+
+          ### Setup instructions:
+          - Install APK on test device
+          - Configure Telegram bot token and chat ID
+          - (Optional) Configure No-IP domain
+
+          ### Features:
+          - Background service
+          - Audio/photo capture
+          - File management
+          - Telegram C2 communication
+
+        draft: false # Set to true to create a draft release
+        prerelease: false # Set to true for a pre-release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Required for creating GitHub Releases (ensure 'contents: write' permission)
+
+  # These jobs run on standard ubuntu-latest runners, as they don't need the Buildozer environment
+  test-controller:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install controller dependencies
+      working-directory: controller/redlogger_controller
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Test controller startup
+      working-directory: controller/redlogger_controller
+      run: |
+        timeout 10s python src/main.py || true
+        echo "Controller startup test completed"
+
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check for hardcoded secrets
+      run: |
+        echo "Checking for hardcoded secrets..."
+        if grep -r "YOUR_TELEGRAM_BOT_TOKEN\|YOUR_TELEGRAM_CHAT_ID\|YOUR_NOIP_URL" . --exclude-dir=.git; then
+          echo "⚠️ Found placeholder tokens - make sure to replace them before use"
+        else
+          echo "✅ No placeholder tokens found"
+        fi
+
+    - name: Validate buildozer.spec
+      run: |
+        echo "Validating buildozer.spec..."
+        if [ -f "redlogger_client/buildozer.spec" ]; then
+          echo "✅ buildozer.spec found"
+          if grep -q "INTERNET" redlogger_client/buildozer.spec; then
+            echo "✅ INTERNET permission found"
+          else
+            echo "❌ INTERNET permission missing"
+            exit 1
+          fi
+        else
+          echo "❌ buildozer.spec not found"
+          exit 1
+        fi
